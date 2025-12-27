@@ -68,29 +68,30 @@ namespace VoxelDestructionPro.VoxelModifications
             QueueImpact(PendingImpactKind.Point, null, impactPoint, impactType, paintRadius, paintNoise, paintFalloff, paintIntensity);
         }
 
-        private void ApplyImpactColorImmediate(Vector3 impactPoint, ImpactType impactType, int noiseSeed, float paintRadius, float paintNoise, float paintFalloff, float paintIntensity)
+        private bool ApplyImpactColorImmediate(Vector3 impactPoint, ImpactType impactType, int noiseSeed, float paintRadius, float paintNoise, float paintFalloff, float paintIntensity)
         {
             if (paintRadius <= 0f)
-                return;
+                return false;
 
             DynamicVoxelObj voxelObj = dyn_targetObj;
             if (voxelObj == null || colorProfile == null || voxelObj.voxelData == null)
-                return;
+                return false;
 
             Collider targetCollider = voxelObj.targetCollider;
             if (targetCollider == null)
-                return;
+                return false;
 
             Vector3 closestPoint = targetCollider.ClosestPoint(impactPoint);
             float maxImpactDistance = Mathf.Max(0.0001f, voxelObj.GetSingleVoxelSize() * 0.5f);
             if ((closestPoint - impactPoint).sqrMagnitude > maxImpactDistance * maxImpactDistance)
-                return;
+                return false;
 
             string meshTag = GetColliderMeshTag(voxelObj);
             if (!colorProfile.TryGetTagEntry(impactType, meshTag, out TagEntry tagEntry))
-                return;
+                return false;
 
             ApplyColorInternal(voxelObj, closestPoint, tagEntry, noiseSeed, paintRadius, paintNoise, paintFalloff, paintIntensity);
+            return true;
         }
 
         public void ApplyImpactColor(RaycastHit hit, ImpactType impactType, float paintRadius, float paintNoise, float paintFalloff, float paintIntensity)
@@ -103,24 +104,25 @@ namespace VoxelDestructionPro.VoxelModifications
             QueueImpact(PendingImpactKind.ColliderPoint, hitCollider, hitPoint, impactType, paintRadius, paintNoise, paintFalloff, paintIntensity);
         }
 
-        private void ApplyImpactColorImmediate(Collider hitCollider, Vector3 hitPoint, ImpactType impactType, int noiseSeed, float paintRadius, float paintNoise, float paintFalloff, float paintIntensity)
+        private bool ApplyImpactColorImmediate(Collider hitCollider, Vector3 hitPoint, ImpactType impactType, int noiseSeed, float paintRadius, float paintNoise, float paintFalloff, float paintIntensity)
         {
             if (paintRadius <= 0f)
-                return;
+                return false;
 
             DynamicVoxelObj voxelObj = dyn_targetObj;
             if (voxelObj == null || colorProfile == null || voxelObj.voxelData == null)
-                return;
+                return false;
 
             Collider targetCollider = voxelObj.targetCollider;
             if (targetCollider == null || hitCollider != targetCollider)
-                return;
+                return false;
 
             string meshTag = GetColliderMeshTag(voxelObj);
             if (!colorProfile.TryGetTagEntry(impactType, meshTag, out TagEntry tagEntry))
-                return;
+                return false;
 
             ApplyColorInternal(voxelObj, hitPoint, tagEntry, noiseSeed, paintRadius, paintNoise, paintFalloff, paintIntensity);
+            return true;
         }
 
         private void QueueImpact(PendingImpactKind kind, Collider hitCollider, Vector3 hitPoint, ImpactType impactType, float paintRadius, float paintNoise, float paintFalloff, float paintIntensity)
@@ -135,6 +137,16 @@ namespace VoxelDestructionPro.VoxelModifications
             pendingNoise = paintNoise;
             pendingFalloff = paintFalloff;
             pendingIntensity = paintIntensity;
+
+            bool applied = pendingKind == PendingImpactKind.Point
+                ? ApplyImpactColorImmediate(pendingPoint, pendingImpactType, impactFrame, pendingRadius, pendingNoise, pendingFalloff, pendingIntensity)
+                : ApplyImpactColorImmediate(pendingCollider, pendingPoint, pendingImpactType, impactFrame, pendingRadius, pendingNoise, pendingFalloff, pendingIntensity);
+
+            if (applied)
+            {
+                impactPending = false;
+                return;
+            }
 
             if (lastRemovedCount > 0 && lastRemovedFrame == Time.frameCount)
                 ApplyPendingImpact();
